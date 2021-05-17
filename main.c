@@ -14,7 +14,7 @@ char* getPidByName(char* name){
     DIR *dir;
     struct dirent *ptr;
     FILE *fp;
-    char filepath[50];//The size is arbitrary, can hold the path of cmdline file
+    char filepath[BUF_SIZE];//The size is arbitrary, can hold the path of cmdline file
     char cur_name[50];//The size is arbitrary, can hold to recognize the command line text
     char buf[BUF_SIZE];
     dir = opendir("/proc"); //Open the path to the
@@ -84,7 +84,7 @@ void printUserManual(){
     printf("the following flags are allowed:\n"
            "-n to sleep process by name.\n"
            "-d to sleep process by pid.\n"
-           "If you do not provide a flag, you can sleep a process by its pid.");
+           "If you do not provide a flag, you can sleep a process by its pid.\n");
 }
 
 int main(int argc, char *argv[])
@@ -105,6 +105,9 @@ int main(int argc, char *argv[])
         int pid;
         printf("Hello. Please enter a PID you would like to sleep for a bit: ");
         scanf("%d", &pid);
+        if(pid < 1){
+            printf("This pid number is invalid.\n");
+        }
         printf("\nokay, I will stop process %d!\n", pid);
         sleepProcessByID(pid, "");
     }
