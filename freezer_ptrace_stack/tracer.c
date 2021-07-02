@@ -109,7 +109,7 @@ struct stack_space get_stack_space(pid_t pid)
     struct stack_space sp;
     do
     {
-        if (strstr(line, "stack") != NULL)
+        if (strstr(line, "[stack]") != NULL)
         {
             return sp;
         }
