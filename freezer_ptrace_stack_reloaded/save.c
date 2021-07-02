@@ -2,7 +2,6 @@
 
 #define debug(i) printf(i)
 
-long ins;
 FILE *write_ptr;
 
 int main(int argc, char *argv[])
@@ -46,12 +45,12 @@ int main(int argc, char *argv[])
     // read stack
     struct stack_space stack_space = get_stack_space(pid);
     long long stack_size = stack_space.end - regs.rsp;
-    unsigned char *stack_data = (char *)malloc(sizeof(char) * stack_size * 4);
+    unsigned char *stack_data = (unsigned char *)malloc(sizeof(unsigned char) * stack_size * 4);
     getdata(pid, regs.rsp, stack_data, stack_size);
 
     // write stack into a binary file
     write_ptr = fopen("data.bin", "wb");
-    fwrite(stack_data, sizeof(char), stack_size, write_ptr);
+    fwrite(stack_data, sizeof(unsigned char), stack_size, write_ptr);
     fclose(write_ptr);
 
     // stop the process if wished

@@ -250,10 +250,15 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int i = 98;
-    char d[4] = {*(stack_data + i*4), *(stack_data + i*4 + 1), *(stack_data + i*4 + 2), *(stack_data + i*4 + 3)};
-    // printf("%02x %02x %02x %02x", *(stack_data + i*4), *(stack_data + i*4 + 1), *(stack_data + i*4 + 2), *(stack_data + i*4 + 3));
-    putdata(new_process, regs.rsp + 4 * 49, d, 4);
+    int i = 92;
+    while (i * 4 <= stack_size)
+    {
+        char d[4] = {*(stack_data + i * 4), *(stack_data + i * 4 + 1), *(stack_data + i * 4 + 2), *(stack_data + i * 4 + 3)};
+        putdata(new_process, regs.rsp + 4 * i/2, d, 4);
+        printf("%02x %02x %02x %02x", *(stack_data + i*4), *(stack_data + i*4 + 1), *(stack_data + i*4 + 2), *(stack_data + i*4 + 3));
+        printf(" Done at %i\n", i);
+        i += 2;
+    }
     if (ptrace(PTRACE_DETACH, new_process, NULL, NULL) == -1)
     {
         printf("unable to deattach the process\n");

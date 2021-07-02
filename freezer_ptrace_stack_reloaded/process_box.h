@@ -18,16 +18,16 @@ struct stack_space
 
 const int long_size = sizeof(long);
 
-void getdata(pid_t pid, long addr, char *str, int len)
+void getdata(pid_t pid, long addr, unsigned char *str, int len)
 {
 
     int p = 0;
-    char *laddr;
+    unsigned char *laddr;
     int i, j;
     union u
     {
         long val;
-        char chars[long_size];
+        unsigned char chars[long_size];
     } data;
     i = 0;
     j = len / long_size;
@@ -55,14 +55,14 @@ void getdata(pid_t pid, long addr, char *str, int len)
     }
     str[len] = '\0';
 }
-void putdata(pid_t pid, long addr, char *str, int len)
+void putdata(pid_t pid, long addr, unsigned char *str, int len)
 {
-    char *laddr;
+    unsigned char *laddr;
     int i, j;
     union u
     {
         long val;
-        char chars[long_size];
+        unsigned char chars[long_size];
     } data;
     i = 0;
     j = len / long_size;
