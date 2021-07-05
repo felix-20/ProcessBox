@@ -20,6 +20,13 @@ int main(int argc, char *argv[])
     pid_t pid = atoi(argv[1]);
     // pid_t pid = 14440;
 
+    // save cmdline and cwd
+    char *command = (char*)malloc(100 * sizeof(char));
+    sprintf(command, "cp -r /proc/%s/cwd $cwd .", argv[1]);
+    system(command);
+    sprintf(command, "cp /proc/%s/cmdline $cmdline .", argv[1]);
+    system(command);
+
     // attach to the process
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
     {

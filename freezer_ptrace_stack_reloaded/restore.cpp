@@ -4,25 +4,15 @@
 
 FILE *read_ptr;
 
-int main(int argc, char *argv[])
+void restore(pid_t pid)
 {
-    // if (argc < 2)
-    // {
-    //     printf("Usage: %s <pid to be restored>\n", argv[0]);
-    //     exit(1);
-    // }
-
-    pid_t pid = atoi(argv[1]);
-    // pid_t pid = 23238;
-
     // attach to the process
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
     {
         printf("invalid PID\n");
-        return 1;
+        exit(1);
     }
     wait(NULL);
-
 
     // read stack register from a binary file
     unsigned long long rsp;
@@ -43,16 +33,84 @@ int main(int argc, char *argv[])
     while (i * 4 <= stack_size)
     {
         unsigned char d[4] = {*(stack_data + i * 4), *(stack_data + i * 4 + 1), *(stack_data + i * 4 + 2), *(stack_data + i * 4 + 3)};
-        putdata(pid, rsp + 4 * i/2, d, 4);
+        putdata(pid, rsp + 4 * i / 2, d, 4);
         i += 2;
     }
+
+    // // deattach from process
+    // if (ptrace(PTRACE_CONT, pid, NULL, NULL) == -1)
+    // {
+    //     printf("unable to continue the process\n");
+    //     exit(1);
+    // }
 
     // deattach from process
     if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1)
     {
         printf("unable to deattach the process\n");
-        return 1;
+        exit(1);
     }
+}
 
+int main(int argc, char *argv[])
+{
+    // if (argc < 2)
+    // {
+    //     printf("Usage: %s <pid to be restored>\n", argv[0]);
+    //     exit(1);
+    // }
+
+    // pid_t pid = atoi(argv[1]);
+    // pid_t pid = 23238;
+
+    // pid_t pid = fork();
+    // if (0 == pid)
+    // {
+    //     // printf("CHILED %i %i\n", pid, getpid());
+    //     // ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+    //     execl("/mnt/c/Users/ghaja/Desktop/university/BS2/ProcessBox/freezer_ptrace_stack_reloaded/counter", "", (char *)NULL);
+    // }
+    // else
+    // {
+    //     // printf("PARENT %i %i\n", pid, getpid());
+    //     sleep(3);
+
+    //     restore(pid);
+
+    //     // wait for child process
+    //     int status;
+    //     if (wait(&status) == -1)
+    //         perror("wait() error");
+    //     else if (WIFEXITED(status))
+    //         printf("The child exited with status of %d\n",
+    //                WEXITSTATUS(status));
+    //     else
+    //         puts("The child did not exit successfully");
+    // }
+
+    // read cmdline
+    char *cmdline = (char *)malloc(sizeof(char) * 10);
+    read_ptr = fopen("cmdline", "r");
+    fscanf(read_ptr, " %s", cmdline);
+    fclose(read_ptr);
+
+    // extract process name
+    char * process = strtok(cmdline, " ");
+    if(process[0] == '.')
+        process ++;
+    if(process[0] == '/')
+        process ++;
+    if(process[0] == '.')
+        process ++;
+    printf("%s", process);
+
+    // create a new process
+    // FIXME
+    system("cd cwd");
+    system(cmdline);
+
+    pid_t pid = getPidByName(process);
+    restore(pid);
+    
     return 0;
 }
