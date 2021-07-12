@@ -1,4 +1,5 @@
-#include "process_box.h"
+#include "pb_memory.h"
+#include "pb_files.h"
 
 #define debug(i) printf(i)
 
@@ -14,17 +15,24 @@ void restore(pid_t pid)
     }
     wait(NULL);
 
-    // read stack register from a binary file
-    unsigned long long rsp;
+    // read registers from a binary file
+    struct user_regs_struct regs;
     read_ptr = fopen("registers.bin", "rb");
-    fscanf(read_ptr, " %llu", &rsp);
+    fread(&regs, sizeof(struct user_regs_struct), 1, read_ptr);
     fclose(read_ptr);
+
+    // set registers
+    if (ptrace(PTRACE_SETREGS, pid, NULL, &regs) == -1)
+    {
+        printf("unable to set registers\n");
+        exit(1);
+    }
 
     // read stack from a binary file
     struct stack_space stack_space = get_stack_space(pid);
-    long long stack_size = stack_space.end - rsp;
+    long long stack_size = stack_space.end - regs.rsp;
     unsigned char *stack_data = (unsigned char *)malloc(sizeof(unsigned char) * stack_size * 4);
-    read_ptr = fopen("data.bin", "rb");
+    read_ptr = fopen("stack.bin", "rb");
     fread(stack_data, sizeof(unsigned char), stack_size, read_ptr);
     fclose(read_ptr);
 
@@ -33,16 +41,26 @@ void restore(pid_t pid)
     while (i * 4 <= stack_size)
     {
         unsigned char d[4] = {*(stack_data + i * 4), *(stack_data + i * 4 + 1), *(stack_data + i * 4 + 2), *(stack_data + i * 4 + 3)};
-        putdata(pid, rsp + 4 * i / 2, d, 4);
+        putdata(pid, regs.rsp + 4 * i / 2, d, 4);
         i += 2;
     }
 
-    // // deattach from process
-    // if (ptrace(PTRACE_CONT, pid, NULL, NULL) == -1)
-    // {
-    //     printf("unable to continue the process\n");
-    //     exit(1);
-    // }
+    // read heap from a binary file
+    struct heap_space heap_space = get_heap_space(pid);
+    long long heap_size = heap_space.end - heap_space.start - 2000;
+    unsigned char *heap_data = (unsigned char *)malloc(sizeof(unsigned char) * heap_size * 4);
+    read_ptr = fopen("heap.bin", "rb");
+    fread(heap_data, sizeof(unsigned char), heap_size, read_ptr);
+    fclose(read_ptr);
+
+    // write the new heap. start after the return address of main
+    i = 0;
+    while (i * 4 <= heap_size)
+    {
+        unsigned char d[4] = {*(heap_data + i * 4), *(heap_data + i * 4 + 1), *(heap_data + i * 4 + 2), *(heap_data + i * 4 + 3)};
+        putdata(pid, heap_space.start + 2000 + 4 * i / 2, d, 4);
+        i += 2;
+    }
 
     // deattach from process
     if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1)
@@ -88,28 +106,38 @@ int main(int argc, char *argv[])
     //         puts("The child did not exit successfully");
     // }
 
-    // read cmdline
-    char *cmdline = (char *)malloc(sizeof(char) * 10);
-    read_ptr = fopen("cmdline", "r");
-    fscanf(read_ptr, " %s", cmdline);
-    fclose(read_ptr);
+    // // read cmdline
+    // char *cmdline = (char *)malloc(sizeof(char) * 10);
+    // read_ptr = fopen("cmdline", "r");
+    // fscanf(read_ptr, " %s", cmdline);
+    // fclose(read_ptr);
 
-    // extract process name
-    char * process = strtok(cmdline, " ");
-    if(process[0] == '.')
-        process ++;
-    if(process[0] == '/')
-        process ++;
-    if(process[0] == '.')
-        process ++;
-    printf("%s", process);
+    // // extract process name
+    // char * process = strtok(cmdline, " ");
+    // if(process[0] == '.')
+    //     process ++;
+    // if(process[0] == '/')
+    //     process ++;
+    // printf("%s", process);
 
     // create a new process
     // FIXME
-    system("cd cwd");
-    system(cmdline);
+    // system("cd cwd");
+    // system(cmdline);
 
-    pid_t pid = getPidByName(process);
+    struct pb_fd file;
+    file.fd = 3;
+    file.mode = 1;
+    file.offset = 17;
+    file.size = 64;
+    file.filename = "/mnt/c/Users/ghaja/Desktop/university/BS2/ProcessBox/freeze_fd/out.txt";
+    file.contents = "HI\n0\n1\n2\n3\n4\n5\n6\n";
+    restore_file(file);
+    restore_fd(file);
+
+    // pid_t pid = getPidByName(process);
+    
+    pid_t pid = 5349;
     restore(pid);
     
     return 0;
