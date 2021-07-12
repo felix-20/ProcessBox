@@ -115,6 +115,9 @@ int main(int argc, char *argv[])
     struct pb_fd *fptr = &file;
     parse_pb_fd(pid, fptr);
 
+    // save info about file
+    save_file_content_and_info(fptr, "file.backup");
+
     // stop the process if wished
     if (stop_process_afterwards)
     {

@@ -126,14 +126,15 @@ int main(int argc, char *argv[])
     // system(cmdline);
 
     struct pb_fd file;
-    file.fd = 3;
+    restore_file_content_and_info(&file, "file.backup");
+   /* file.fd = 3;
     file.mode = 1;
     file.offset = 17;
     file.size = 64;
     file.filename = "/mnt/c/Users/ghaja/Desktop/university/BS2/ProcessBox/freeze_fd/out.txt";
     file.contents = "HI\n0\n1\n2\n3\n4\n5\n6\n";
     restore_file(file);
-    restore_fd(file);
+    restore_fd(file);*/
 
     // pid_t pid = getPidByName(process);
     
