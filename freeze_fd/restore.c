@@ -72,13 +72,13 @@ void restore(pid_t pid)
 
 int main(int argc, char *argv[])
 {
-    // if (argc < 2)
-    // {
-    //     printf("Usage: %s <pid to be restored>\n", argv[0]);
-    //     exit(1);
-    // }
+    if (argc < 2)
+    {
+        printf("Usage: %s <pid to be restored>\n", argv[0]);
+        exit(1);
+    }
 
-    // pid_t pid = atoi(argv[1]);
+    pid_t pid = atoi(argv[1]);
     // pid_t pid = 23238;
 
     // pid_t pid = fork();
@@ -126,19 +126,19 @@ int main(int argc, char *argv[])
     // system(cmdline);
 
     struct pb_fd file;
-    restore_file_content_and_info(&file, "file.backup");
-   /* file.fd = 3;
+    // restore_file_content_and_info(&file, "file.backup");
+    file.fd = 3;
     file.mode = 1;
     file.offset = 17;
     file.size = 64;
     file.filename = "/mnt/c/Users/ghaja/Desktop/university/BS2/ProcessBox/freeze_fd/out.txt";
     file.contents = "HI\n0\n1\n2\n3\n4\n5\n6\n";
-    restore_file(file);
-    restore_fd(file);*/
+    restore_file(&file);
+    restore_fd(&file);
 
     // pid_t pid = getPidByName(process);
     
-    pid_t pid = 5349;
+    // pid_t pid = 5349;
     restore(pid);
     
     return 0;
