@@ -11,7 +11,7 @@ void parse_pb_fd(pid_t pid, struct pb_fd *cp_file)
     /* Go to last fd */
     snprintf(tmp_fn, 30, "/proc/%d/fd", pid);
     proc_fd = opendir(tmp_fn);
-    while(1)
+    while (1)
     {
         fd_dirent = readdir(proc_fd);
         if (fd_dirent == NULL)
@@ -58,12 +58,12 @@ int main(int argc, char *argv[])
     // pid_t pid = 4287;
     // int stop_process_afterwards = 0;
 
-    // save cmdline and cwd
-    char *command = (char*)malloc(100 * sizeof(char));
-    sprintf(command, "cp -r /proc/%s/cwd $cwd .", argv[1]);
-    system(command);
-    sprintf(command, "cp /proc/%s/cmdline $cmdline .", argv[1]);
-    system(command);
+    // // save cmdline and cwd
+    // char *command = (char *)malloc(100 * sizeof(char));
+    // sprintf(command, "cp -r /proc/%s/cwd $cwd .", argv[1]);
+    // system(command);
+    // sprintf(command, "cp /proc/%s/cmdline $cmdline .", argv[1]);
+    // system(command);
 
     // attach to the process
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)

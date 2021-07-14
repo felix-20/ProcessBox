@@ -93,77 +93,38 @@ void fetch_fd(pid_t pid, int fd, struct stat file_stat, char *fd_path,
     } while (bufsz <= 8192); /* Keep it sane */
 
     FILE *fptr = fopen(file->filename, "r");
-    file->contents = malloc(sizeof(char) * file->size);
-    fread(file->contents, sizeof(char), file->size, fptr);
+    file->contents = malloc(sizeof(char) * 2000);
+    fread(file->contents, sizeof(char), 2000, fptr);
 
 out:
     free(buf);
 }
 
-// void write_chunk_fd(void *fptr, struct pb_fd *file)
-// {
-//     write_bit(fptr, &file->fd, sizeof(int));
-//     write_bit(fptr, &file->mode, sizeof(int));
-//     write_bit(fptr, &file->offset, sizeof(off_t));
-
-//     int have_contents = !!(file->contents);
-//     write_string(fptr, file->filename);
-//     write_bit(fptr, &file->deleted, sizeof(int));
-//     write_bit(fptr, &file->size, sizeof(int));
-//     write_bit(fptr, &have_contents, sizeof(int));
-//     if (file->contents)
-// 	write_bit(fptr, file->contents, file->size);
-// }
-
 // /* -------- RESTORE ---------- */
 
-// void read_chunk_fd(void *fptr)
-// {
-//     struct pb_fd fd;
-
-//     read_bit(fptr, &fd.fd, sizeof(int));
-//     read_bit(fptr, &fd.offset, sizeof(off_t));
-
-//     read_chunk_fd_file(fptr, &fd);
-// }
-
-void restore_file(struct pb_fd *file){
-    FILE *fptr = fopen(file->filename, "w");
-    fprintf(fptr, file->contents);
+void restore_file(char *fn, char *contents)
+{
+    // printf("%i", remove(file->filename));
+    FILE *fptr = fopen(fn, "w");
+    fprintf(fptr, contents);
     fclose(fptr);
 }
 
-void restore_fd(struct pb_fd *file)
+void restore_fd(struct pb_fd *file, char *fn)
 {
     int ffd;
-    ffd = open(file->filename, file->mode);
+    ffd = open(fn, file->mode);
 
     if (ffd != file->fd)
     {
         dup2(ffd, file->fd);
         close(ffd);
     }
+    lseek(ffd, 0, SEEK_END);
 }
 
-// void read_chunk_fd_file(void *fptr, struct pb_fd *fd)
-// {
-//     int have_contents;
-//     fd->filename = read_string(fptr, NULL, 0);
-//     read_bit(fptr, &fd->deleted, sizeof(int));
-//     read_bit(fptr, &fd->size, sizeof(int));
-//     read_bit(fptr, &have_contents, sizeof(int));
-//     if (have_contents)
-//     {
-//         fd->contents = malloc(fd->size);
-//         read_bit(fptr, fd->contents, fd->size);
-//     }
-//     else
-//         fd->contents = NULL;
-
-//     restore_fd_file(fd);
-// }
-
-void save_file_content_and_info(struct pb_fd *file, char* file_location){
+void save_file_content_and_info(struct pb_fd *file, char *file_location)
+{
 
     FILE *backup_file = fopen(file_location, "wb");
     fprintf(backup_file, "%i\n", file->fd);
@@ -172,70 +133,31 @@ void save_file_content_and_info(struct pb_fd *file, char* file_location){
     fprintf(backup_file, "%i\n", file->size);
     fprintf(backup_file, "%s\n", file->filename);
     fprintf(backup_file, "%s\n", file->contents);
-    // fwrite(file->fd, 1, sizeof(file->fd), backup_file);
-    // fwrite(file->mode, 1, sizeof(file->mode), backup_file);
-    // fwrite(file->offset, 1, sizeof(file->offset), backup_file);
-    // fwrite(file->size, 1, sizeof(file->size), backup_file);
-    // fwrite(file->filename, 1, sizeof(file->filename), backup_file);
-    // fwrite(file->contents, 1, sizeof(file->contents), backup_file);
     fclose(backup_file);
 }
 
-void restore_file_content_and_info(struct pb_fd *file, char* backup_file_location){
-    FILE *backup_file = fopen(backup_file_location, "r");
-//     char *line_buf = NULL;
-//     size_t line_buf_size = 0;
-//     ssize_t line_size;
-//     if (!backup_file)   {
-//         fprintf(stderr, "Error opening file '%s'\n", backup_file_location);
-//         return EXIT_FAILURE;
-//     }
-//     getline(&line_buf, &line_buf_size, fp);
-//     file->fd=strol(line_buf);
-//     getline(&line_buf, &line_buf_size, fp);
-//     file->mode=strol(line_buf);
-//     getline(&line_buf, &line_buf_size, fp);
-//     file->offset=stroll(line_buf);
-//     getline(&line_buf, &line_buf_size, fp);
-//     file->size=strol(line_buf);
-//     //set line_size to get into while loop
-//     line_size=getline(&line_buf, &line_buf_size, fp);
-//     file->filename=line_buf;
-
-//     FILE *content_stream;
-//     char *buf;
-//     size_t len;
-//     content_stream = open_memstream(&buf, &len);
-
-//      while (line_size >= 0)
-//   {
-//     line_size = getline(&line_buf, &line_buf_size, fp);
-//     fprintf(content_stream, line_buf);
-//   }
-//   fclose(content_stream);
-    fscanf(backup_file, "%i\n", &file->fd);
-    fscanf(backup_file, "%i\n", &file->mode);
-    fscanf(backup_file, "%li\n", &file->offset);
-    fscanf(backup_file, "%i\n", &file->size);
-    fscanf(backup_file, "%s\n", file->filename);
-    file->contents = "Judith muss sich unseren Quatsch anhören";
-    fclose(backup_file);
-//   file->contents=buf;
-//   free(buf);
-//   free(line_buf);
-  restore_file(file);
-  restore_fd(file);
-
-}
-
-/*
-struct pb_fd
+void restore_file_content_and_info(struct pb_fd *file)
 {
-    int fd;
-    int mode;
-    off_t offset;
-    int size;
-    char *filename;
-    char *contents;
-};
-*/
+    FILE *backup_file = fopen("file.backup", "r");
+    fscanf(backup_file, "%i", &(file->fd));
+    fscanf(backup_file, "%i", &(file->mode));
+    fscanf(backup_file, "%li", &(file->offset));
+    fscanf(backup_file, "%i", &(file->size));
+
+    char fn[100];
+    char *line = NULL;
+    size_t len = 0;
+    fscanf(backup_file, "%s", fn);
+    len = strlen(fn);
+    file->filename = malloc(sizeof(char) * len);
+    file->filename = fn;
+
+
+    getline(&line, &len, backup_file);
+
+    getdelim(&line, &len, '\0', backup_file);
+    file->contents = malloc(sizeof(char) * len);
+    file->contents = line;
+
+    fclose(backup_file);
+}

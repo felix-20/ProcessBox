@@ -7,14 +7,6 @@ FILE *read_ptr;
 
 void restore(pid_t pid)
 {
-    // attach to the process
-    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
-    {
-        printf("invalid PID\n");
-        exit(1);
-    }
-    wait(NULL);
-
     // read registers from a binary file
     struct user_regs_struct regs;
     read_ptr = fopen("registers.bin", "rb");
@@ -61,13 +53,6 @@ void restore(pid_t pid)
         putdata(pid, heap_space.start + 2000 + 4 * i / 2, d, 4);
         i += 2;
     }
-
-    // deattach from process
-    if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1)
-    {
-        printf("unable to deattach the process\n");
-        exit(1);
-    }
 }
 
 int main(int argc, char *argv[])
@@ -79,67 +64,31 @@ int main(int argc, char *argv[])
     }
 
     pid_t pid = atoi(argv[1]);
-    // pid_t pid = 23238;
+    // pid_t pid = 2794;
 
-    // pid_t pid = fork();
-    // if (0 == pid)
-    // {
-    //     // printf("CHILED %i %i\n", pid, getpid());
-    //     // ptrace(PTRACE_TRACEME, 0, NULL, NULL);
-    //     execl("/mnt/c/Users/ghaja/Desktop/university/BS2/ProcessBox/freezer_ptrace_stack_reloaded/counter", "", (char *)NULL);
-    // }
-    // else
-    // {
-    //     // printf("PARENT %i %i\n", pid, getpid());
-    //     sleep(3);
-
-    //     restore(pid);
-
-    //     // wait for child process
-    //     int status;
-    //     if (wait(&status) == -1)
-    //         perror("wait() error");
-    //     else if (WIFEXITED(status))
-    //         printf("The child exited with status of %d\n",
-    //                WEXITSTATUS(status));
-    //     else
-    //         puts("The child did not exit successfully");
-    // }
-
-    // // read cmdline
-    // char *cmdline = (char *)malloc(sizeof(char) * 10);
-    // read_ptr = fopen("cmdline", "r");
-    // fscanf(read_ptr, " %s", cmdline);
-    // fclose(read_ptr);
-
-    // // extract process name
-    // char * process = strtok(cmdline, " ");
-    // if(process[0] == '.')
-    //     process ++;
-    // if(process[0] == '/')
-    //     process ++;
-    // printf("%s", process);
-
-    // create a new process
-    // FIXME
-    // system("cd cwd");
-    // system(cmdline);
+     // attach to the process
+    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
+    {
+        printf("invalid PID\n");
+        exit(1);
+    }
+    wait(NULL);
 
     struct pb_fd file;
-    // restore_file_content_and_info(&file, "file.backup");
-    file.fd = 3;
-    file.mode = 1;
-    file.offset = 17;
-    file.size = 64;
-    file.filename = "/mnt/c/Users/ghaja/Desktop/university/BS2/ProcessBox/freeze_fd/out.txt";
-    file.contents = "HI\n0\n1\n2\n3\n4\n5\n6\n";
-    restore_file(&file);
-    restore_fd(&file);
+    restore_file_content_and_info(&file);
+    char fn[100];
+    strcpy(fn, file.filename);
+    restore_file(fn, file.contents);
+    restore_fd(&file, fn);
 
-    // pid_t pid = getPidByName(process);
-    
-    // pid_t pid = 5349;
     restore(pid);
+
+    // deattach from process
+    if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1)
+    {
+        printf("unable to deattach the process\n");
+        exit(1);
+    }
     
     return 0;
 }
