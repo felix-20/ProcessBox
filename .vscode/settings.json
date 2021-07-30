@@ -2,6 +2,8 @@
     "files.associations": {
         "*.tcc": "c",
         "string": "c",
-        "istream": "c"
+        "istream": "c",
+        "types.h": "c",
+        "wait.h": "c"
     }
 }

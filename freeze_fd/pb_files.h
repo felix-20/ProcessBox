@@ -136,7 +136,7 @@ void save_file_content_and_info(struct pb_fd *file, char *file_location)
     fclose(backup_file);
 }
 
-void restore_file_content_and_info(struct pb_fd *file)
+void get_file_content_and_info(struct pb_fd *file)
 {
     FILE *backup_file = fopen("file.backup", "r");
     fscanf(backup_file, "%i", &(file->fd));
@@ -151,7 +151,6 @@ void restore_file_content_and_info(struct pb_fd *file)
     len = strlen(fn);
     file->filename = malloc(sizeof(char) * len);
     file->filename = fn;
-
 
     getline(&line, &len, backup_file);
 

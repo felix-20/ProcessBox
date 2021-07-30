@@ -3,7 +3,6 @@
 #include <sys/wait.h>
 #include <sys/user.h>
 #include <sys/reg.h>
-#include <sys/wait.h>
 #include <sys/uio.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -12,6 +11,9 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <sys/ptrace.h>
+#include <unistd.h>
+#include <sys/syscall.h>
 
 
 #define BUF_SIZE 1024

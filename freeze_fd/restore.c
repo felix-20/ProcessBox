@@ -55,6 +55,13 @@ void restore(pid_t pid)
     }
 }
 
+void set_offset(pid_t pid, int fd, int offset)
+{
+    char command[1000];
+    snprintf(command, 1000, "gdb --pid=%i --silent --batch -ex \"compile code lseek(%i,%i,0)\"", pid, fd, offset);
+    system(command);
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 2)
@@ -64,22 +71,15 @@ int main(int argc, char *argv[])
     }
 
     pid_t pid = atoi(argv[1]);
-    // pid_t pid = 2794;
+    // pid_t pid = 27856;
 
-     // attach to the process
+    // attach to the process
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
     {
         printf("invalid PID\n");
         exit(1);
     }
     wait(NULL);
-
-    struct pb_fd file;
-    restore_file_content_and_info(&file);
-    char fn[100];
-    strcpy(fn, file.filename);
-    restore_file(fn, file.contents);
-    restore_fd(&file, fn);
 
     restore(pid);
 
@@ -89,6 +89,15 @@ int main(int argc, char *argv[])
         printf("unable to deattach the process\n");
         exit(1);
     }
-    
+    	
+    // restore file
+    struct pb_fd file;
+    get_file_content_and_info(&file);
+    char fn[100];
+    strcpy(fn, file.filename);
+    restore_file(fn, file.contents);
+    restore_fd(&file, fn);
+    set_offset(pid, file.fd, file.offset);
+
     return 0;
 }
