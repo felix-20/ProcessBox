@@ -55,13 +55,6 @@ void restore(pid_t pid)
     }
 }
 
-void set_offset(pid_t pid, int fd, int offset)
-{
-    char command[1000];
-    snprintf(command, 1000, "gdb --pid=%i --silent --batch -ex \"compile code lseek(%i,%i,0)\"", pid, fd, offset);
-    system(command);
-}
-
 int main(int argc, char *argv[])
 {
     if (argc < 2)
@@ -96,7 +89,8 @@ int main(int argc, char *argv[])
     char fn[100];
     strcpy(fn, file.filename);
     restore_file(fn, file.contents);
-    restore_fd(&file, fn);
+    // only use when the process didn't open the file manually 
+    // restore_fd(pid, &file, fn);
     set_offset(pid, file.fd, file.offset);
 
     return 0;

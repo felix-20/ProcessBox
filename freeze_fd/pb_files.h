@@ -100,29 +100,6 @@ out:
     free(buf);
 }
 
-// /* -------- RESTORE ---------- */
-
-void restore_file(char *fn, char *contents)
-{
-    // printf("%i", remove(file->filename));
-    FILE *fptr = fopen(fn, "w");
-    fprintf(fptr, contents);
-    fclose(fptr);
-}
-
-void restore_fd(struct pb_fd *file, char *fn)
-{
-    int ffd;
-    ffd = open(fn, file->mode);
-
-    if (ffd != file->fd)
-    {
-        dup2(ffd, file->fd);
-        close(ffd);
-    }
-    lseek(ffd, 0, SEEK_END);
-}
-
 void save_file_content_and_info(struct pb_fd *file, char *file_location)
 {
 
@@ -134,6 +111,48 @@ void save_file_content_and_info(struct pb_fd *file, char *file_location)
     fprintf(backup_file, "%s\n", file->filename);
     fprintf(backup_file, "%s\n", file->contents);
     fclose(backup_file);
+}
+
+// /* -------- RESTORE ---------- */
+
+void restore_file(char *fn, char *contents)
+{
+    // printf("%i", remove(file->filename));
+    FILE *fptr = fopen(fn, "w");
+    fprintf(fptr, contents);
+    fclose(fptr);
+}
+
+void restore_fd(pid_t pid, struct pb_fd *file, char *fn)
+{
+    char *access_mode;
+    switch (file->mode)
+    {
+    case O_RDONLY:
+        access_mode = "r";
+        break;
+    case O_WRONLY:
+        access_mode = "w";
+        break;
+    case O_RDWR:
+        access_mode = "r+";
+        break;
+    }
+    char command[1000];
+    snprintf(command, 1000,
+             "gdb --pid=%i --silent --batch -ex 'compile code FILE* fp = fopen(\"%s\", \"%s\");int ffd = fileno(fp);if (ffd != %i){dup2(ffd, %i);close(ffd);}'",
+             pid, fn, access_mode, file->fd, file->fd);
+    system(command);
+    printf("\n\n%s\n\n", command);
+}
+
+void set_offset(pid_t pid, int fd, int offset)
+{
+    char command[1000];
+    snprintf(command, 1000,
+             "gdb --pid=%i --silent --batch -ex 'compile code lseek(%i,%i,0)'",
+             pid, fd, offset);
+    system(command);
 }
 
 void get_file_content_and_info(struct pb_fd *file)
