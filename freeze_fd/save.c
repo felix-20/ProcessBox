@@ -1,7 +1,7 @@
 #include "pb_files.h"
 #include "pb_memory.h"
 
-void parse_pb_fd(pid_t pid, struct pb_fd *cp_file)
+void parse_pb_fd(pid_t pid, struct pb_file *cp_file)
 {
     struct dirent *fd_dirent;
     struct stat stat_buf;
@@ -35,8 +35,9 @@ void parse_pb_fd(pid_t pid, struct pb_fd *cp_file)
         cp_file->mode = O_RDONLY;
 
     cp_file->offset = get_offset(pid, cp_file->fd);
+    cp_file->size = stat_buf.st_size;
 
-    fetch_fd(pid, cp_file->fd, stat_buf, tmp_fn, cp_file);
+    save_contents(cp_file, tmp_fn);
 }
 
 FILE *write_ptr;
@@ -111,12 +112,12 @@ int main(int argc, char *argv[])
     fclose(write_ptr);
 
     // save last file
-    struct pb_fd file;
-    struct pb_fd *fptr = &file;
+    struct pb_file file;
+    struct pb_file *fptr = &file;
     parse_pb_fd(pid, fptr);
 
     // save info about file
-    save_file_content_and_info(fptr, "file.backup");
+    write_file_backup(fptr, "file.backup");
 
     // stop the process if wished
     if (stop_process_afterwards)

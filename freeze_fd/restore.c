@@ -84,14 +84,14 @@ int main(int argc, char *argv[])
     }
     	
     // restore file
-    struct pb_fd file;
-    get_file_content_and_info(&file);
+    struct pb_file file;
+    read_file_backup(&file);
     char fn[100];
     strcpy(fn, file.filename);
-    restore_file(fn, file.contents);
+    restore_contents(fn, &file);
     // only use when the process didn't open the file manually 
     // restore_fd(pid, &file, fn);
-    set_offset(pid, file.fd, file.offset);
+    restore_offset(pid, &file);
 
     return 0;
 }

@@ -8,23 +8,12 @@
 #include <sys/ptrace.h>
 #include <stdlib.h>
 
-/* The possibilities for the third argument to `setvbuf'.  */
-#define _IOFBF 0 /* Fully buffered.  */
-#define _IOLBF 1 /* Line buffered.  */
-#define _IONBF 2 /* No buffering.  */
+#define MAXSIZE 1 << 13
 
-/* Default buffer size.  */
-#define BUFSIZ 8192
-
-/* Some possibly not declared defines */
-#ifndef O_DIRECT
-#define O_DIRECT 040000 /* direct disk access hint */
-#endif                  /* O_DIRECT */
-#ifndef O_NOATIME
-#define O_NOATIME 01000000
-#endif /* O_NOATIME */
-
-struct pb_fd
+/*
+ProcessBox File
+*/
+struct pb_file
 {
     int fd;
     int mode;
@@ -34,76 +23,80 @@ struct pb_fd
     char *contents;
 };
 
+/*
+Returns offset of file with (fd) of process with (pid)
+*/
 off_t get_offset(pid_t pid, int fd)
 {
-    FILE *fp;
-    char line[2048], fdinfo_path[50];
+    FILE *fptr;
+    char line[1024], fdinfo_path[64];
     snprintf(fdinfo_path, sizeof(fdinfo_path), "/proc/%d/fdinfo/%d", pid, fd);
-    fp = fopen(fdinfo_path, "r");
-    if (fp == NULL)
+
+    fptr = fopen(fdinfo_path, "r");
+    if (fptr == NULL)
     {
-        perror("Error opening file");
+        perror("Error opening fdinfo file");
         exit(1);
     }
 
-    fgets(line, 2048, fp);
+    fgets(line, sizeof(line), fptr);
     return atoi(line + 5);
 }
 
 /* -------- SAVE ---------- */
 
-static int get_file_size(pid_t pid, int fd)
+/*
+Returs size of file with (fd) of process with (pid)
+*/
+static int get_size(pid_t pid, int fd)
 {
     char tmp_fn[1024];
-    snprintf(tmp_fn, 1024, "/proc/%d/fd/%d", pid, fd);
+    snprintf(tmp_fn, sizeof(tmp_fn), "/proc/%d/fd/%d", pid, fd);
     struct stat st;
     stat(tmp_fn, &st);
     return st.st_size;
 }
 
-void fetch_fd(pid_t pid, int fd, struct stat file_stat, char *fd_path,
-              struct pb_fd *file)
+/*
+Writes contents of file with (file_path) in (file) 
+*/
+void save_contents(struct pb_file *file, char *file_path)
 {
-    int bufsz = 512;
+    int bufsz = 8192;
     int retsz;
     char *buf = NULL;
 
-    file->filename = NULL;
-    file->size = file_stat.st_size;
-
-    do
+    buf = malloc(bufsz);
+    retsz = readlink(file_path, buf, bufsz);
+    if (retsz <= 0)
     {
-        buf = malloc(bufsz);
-        retsz = readlink(fd_path, buf, bufsz);
-        if (retsz <= 0)
-        {
-            fprintf(stderr, "Error reading FD %d\n", fd);
-            goto out;
-        }
-        else if (retsz < bufsz)
-        {
-            /* Read was successful */
-            buf[retsz] = '\0';
-            file->filename = strdup(buf);
-            break;
-        }
-        /* Otherwise, double the buffer size and try again */
-        free(buf);
-        bufsz <<= 1;
-    } while (bufsz <= 8192); /* Keep it sane */
+        fprintf(stderr, "Error reading FD %d\n", file->fd);
+        goto out;
+    }
+    buf[retsz] = '\0';
+    file->filename = strdup(buf);
 
     FILE *fptr = fopen(file->filename, "r");
-    file->contents = malloc(sizeof(char) * 2000);
-    fread(file->contents, sizeof(char), 2000, fptr);
+    if (fptr == NULL)
+    {
+        perror("Error opening file");
+        exit(1);
+    }
+
+    file->contents = malloc(sizeof(char) * MAXSIZE);
+    fread(file->contents, sizeof(char), MAXSIZE, fptr);
 
 out:
     free(buf);
 }
 
-void save_file_content_and_info(struct pb_fd *file, char *file_location)
+/*
+Writes all fields of (file) into a backup file with (file_name)
+*/
+void write_file_backup(struct pb_file *file, char *file_name)
 {
 
-    FILE *backup_file = fopen(file_location, "wb");
+    FILE *backup_file = fopen(file_name, "wb");
     fprintf(backup_file, "%i\n", file->fd);
     fprintf(backup_file, "%i\n", file->mode);
     fprintf(backup_file, "%li\n", file->offset);
@@ -115,15 +108,27 @@ void save_file_content_and_info(struct pb_fd *file, char *file_location)
 
 // /* -------- RESTORE ---------- */
 
-void restore_file(char *fn, char *contents)
+/*
+Creates file with file name (file_path) and writes (file)'s contents in it
+*/
+void restore_contents(char *file_path, struct pb_file *file)
 {
-    // printf("%i", remove(file->filename));
-    FILE *fptr = fopen(fn, "w");
-    fprintf(fptr, contents);
+    FILE *fptr = fopen(file_path, "w");
+    if (fptr == NULL)
+    {
+        perror("Error creating file");
+        exit(1);
+    }
+    fprintf(fptr, "%s", file->contents);
     fclose(fptr);
 }
 
-void restore_fd(pid_t pid, struct pb_fd *file, char *fn)
+/*
+Makes process with (pid) opens (file) with (file_path).
+Ensure that the opened file has an identical fd of (file).
+!! Only use this function, if the new process didn't open the file yet !!
+*/
+void restore_fd(pid_t pid, struct pb_file *file, char *file_path)
 {
     char *access_mode;
     switch (file->mode)
@@ -141,21 +146,26 @@ void restore_fd(pid_t pid, struct pb_fd *file, char *fn)
     char command[1000];
     snprintf(command, 1000,
              "gdb --pid=%i --silent --batch -ex 'compile code FILE* fp = fopen(\"%s\", \"%s\");int ffd = fileno(fp);if (ffd != %i){dup2(ffd, %i);close(ffd);}'",
-             pid, fn, access_mode, file->fd, file->fd);
+             pid, file_path, access_mode, file->fd, file->fd);
     system(command);
-    printf("\n\n%s\n\n", command);
 }
 
-void set_offset(pid_t pid, int fd, int offset)
+/*
+Sets offset of process with (pid) to (file)'s offset
+*/
+void restore_offset(pid_t pid, struct pb_file *file)
 {
     char command[1000];
     snprintf(command, 1000,
-             "gdb --pid=%i --silent --batch -ex 'compile code lseek(%i,%i,0)'",
-             pid, fd, offset);
+             "gdb --pid=%i --silent --batch -ex 'compile code lseek(%i,%li,0)'",
+             pid, file->fd, file->offset);
     system(command);
 }
 
-void get_file_content_and_info(struct pb_fd *file)
+/*
+Reads the saved file.backup file and writes it into (file)
+*/
+void read_file_backup(struct pb_file *file)
 {
     FILE *backup_file = fopen("file.backup", "r");
     fscanf(backup_file, "%i", &(file->fd));
@@ -163,16 +173,17 @@ void get_file_content_and_info(struct pb_fd *file)
     fscanf(backup_file, "%li", &(file->offset));
     fscanf(backup_file, "%i", &(file->size));
 
-    char fn[100];
+    char file_path[100];
     char *line = NULL;
     size_t len = 0;
-    fscanf(backup_file, "%s", fn);
-    len = strlen(fn);
+    fscanf(backup_file, "%s", file_path);
+    len = strlen(file_path);
     file->filename = malloc(sizeof(char) * len);
-    file->filename = fn;
+    file->filename = file_path;
 
     getline(&line, &len, backup_file);
 
+    // read until the end
     getdelim(&line, &len, '\0', backup_file);
     file->contents = malloc(sizeof(char) * len);
     file->contents = line;
