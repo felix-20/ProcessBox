@@ -4,6 +4,9 @@
         "string": "c",
         "istream": "c",
         "types.h": "c",
-        "wait.h": "c"
-    }
+        "wait.h": "c",
+        "string_view": "c",
+        "memory_resource": "c",
+        "reg.h": "c"
+    },
 }

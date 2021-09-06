@@ -1,23 +1,22 @@
-#include <sys/ptrace.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/user.h>
-#include <sys/reg.h>
-#include <sys/uio.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdlib.h>
-#include <sys/types.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/ptrace.h>
-#include <unistd.h>
+#include <sys/reg.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <sys/user.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
+#define log printf
 
+#define MAXSIZE 1 << 13
 #define BUF_SIZE 1024
-
 struct stack_space
 {
     long start, end;
@@ -148,44 +147,120 @@ struct heap_space get_heap_space(pid_t pid)
     exit(1);
 }
 
-pid_t getPidByName(char* name){
-    //source: https://ofstack.com/C++/9293/linux-gets-pid-based-on-pid-process-name-and-pid-of-c.html
-    DIR *dir;
-    struct dirent *ptr;
-    FILE *fp;
-    char filepath[BUF_SIZE];//The size is arbitrary, can hold the path of cmdline file
-    char cur_name[50];//The size is arbitrary, can hold to recognize the command line text
-    char buf[BUF_SIZE];
-    dir = opendir("/proc"); //Open the path to the
-    if (NULL != dir)
+void save_vma(pid_t pid)
+{
+    FILE *write_ptr;
+
+    // attach to the process
+    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
     {
-        while ((ptr = readdir(dir)) != NULL) //Loop reads each file/folder in the path
-        {
-            //If it reads "." or ".." Skip, and skip the folder name if it is not read
-            if ((strcmp(ptr->d_name, ".") == 0) || (strcmp(ptr->d_name, "..") == 0)) {continue;}
-            if (DT_DIR != ptr->d_type){continue;}
-
-            sprintf(filepath, "/proc/%s/status", ptr->d_name);//Generates the path to the file to be read
-            fp = fopen(filepath, "r");//Open the file
-            if (NULL != fp)
-            {
-                if( fgets(buf, BUF_SIZE-1, fp)== NULL ){
-                    fclose(fp);
-                    continue;
-                    }
-                sscanf(buf, "%*s %s", cur_name);
-
-                //Print the name of the path (that is, the PID of the process) if the file content meets the requirement
-                if (!strcmp(name, cur_name)) {
-                    //printf("PID:  %s", ptr->d_name);
-                    return atoi(ptr->d_name);
-                }
-                fclose(fp);
-            }
-
-        }
-        closedir(dir);//Shut down the path
+        perror("invalid PID\n");
+        exit(1);
     }
-    printf("NOT FOUND");
-    exit(1);
+    log("Process attached successfully\n");
+    wait(NULL);
+
+    // get registers
+    struct user_regs_struct regs;
+    if (ptrace(PTRACE_GETREGS, pid, NULL, &regs) == -1)
+    {
+        printf("unable to fetch registers\n");
+        exit(1);
+    }
+
+    // write registers into a binary file
+    write_ptr = fopen("registers.bin", "wb");
+    fwrite(&regs, sizeof(struct user_regs_struct), 1, write_ptr);
+    fclose(write_ptr);
+    log("Registers saved successfully\n");
+
+    // read stack
+    struct stack_space stack_space = get_stack_space(pid);
+    long long stack_size = stack_space.end - regs.rsp;
+    unsigned char *stack_data = (unsigned char *)malloc(sizeof(unsigned char) * stack_size * 4);
+    getdata(pid, regs.rsp, stack_data, stack_size);
+
+    // write stack into a binary file
+    write_ptr = fopen("stack.bin", "wb");
+    fwrite(stack_data, sizeof(unsigned char), stack_size, write_ptr);
+    fclose(write_ptr);
+    log("Stack saved successfully\n");
+
+    // read heap
+    struct heap_space heap_space = get_heap_space(pid);
+    long long heap_size = heap_space.end - heap_space.start - 2000;
+    unsigned char *heap_data = (unsigned char *)malloc(sizeof(unsigned char) * heap_size * 4);
+    getdata(pid, heap_space.start + 2000, heap_data, heap_size);
+
+    // write heap into a binary file
+    write_ptr = fopen("heap.bin", "wb");
+    fwrite(heap_data, sizeof(unsigned char), heap_size, write_ptr);
+    fclose(write_ptr);
+    log("Heap saved successfully\n");
+}
+
+void restore_vma(pid_t pid)
+{
+    // attach to the process
+    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
+    {
+        printf("invalid PID\n");
+        exit(1);
+    }
+    wait(NULL);
+
+    FILE *read_ptr;
+    // read registers from a binary file
+    struct user_regs_struct regs;
+    read_ptr = fopen("registers.bin", "rb");
+    fread(&regs, sizeof(struct user_regs_struct), 1, read_ptr);
+    fclose(read_ptr);
+
+    // set registers
+    if (ptrace(PTRACE_SETREGS, pid, NULL, &regs) == -1)
+    {
+        printf("unable to set registers\n");
+        exit(1);
+    }
+
+    // read stack from a binary file
+    struct stack_space stack_space = get_stack_space(pid);
+    long long stack_size = stack_space.end - regs.rsp;
+    unsigned char *stack_data = (unsigned char *)malloc(sizeof(unsigned char) * stack_size * 4);
+    read_ptr = fopen("stack.bin", "rb");
+    fread(stack_data, sizeof(unsigned char), stack_size, read_ptr);
+    fclose(read_ptr);
+
+    // write the new stack. start after the return address of main
+    int i = 92;
+    while (i * 4 <= stack_size)
+    {
+        unsigned char d[4] = {*(stack_data + i * 4), *(stack_data + i * 4 + 1), *(stack_data + i * 4 + 2), *(stack_data + i * 4 + 3)};
+        putdata(pid, regs.rsp + 4 * i / 2, d, 4);
+        i += 2;
+    }
+
+    // read heap from a binary file
+    struct heap_space heap_space = get_heap_space(pid);
+    long long heap_size = heap_space.end - heap_space.start - 2000;
+    unsigned char *heap_data = (unsigned char *)malloc(sizeof(unsigned char) * heap_size * 4);
+    read_ptr = fopen("heap.bin", "rb");
+    fread(heap_data, sizeof(unsigned char), heap_size, read_ptr);
+    fclose(read_ptr);
+
+    // write the new heap. start after the return address of main
+    i = 0;
+    while (i * 4 <= heap_size)
+    {
+        unsigned char d[4] = {*(heap_data + i * 4), *(heap_data + i * 4 + 1), *(heap_data + i * 4 + 2), *(heap_data + i * 4 + 3)};
+        putdata(pid, heap_space.start + 2000 + 4 * i / 2, d, 4);
+        i += 2;
+    }
+
+    // deattach from process
+    if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1)
+    {
+        printf("unable to deattach the process\n");
+        exit(1);
+    }
 }

@@ -4,7 +4,7 @@
 
 FILE *read_ptr;
 
-void restore(pid_t pid)
+void restore_vma(pid_t pid)
 {
     // attach to the process
     if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
     // system(cmdline);
 
     // pid_t pid = getPidByName(process);
-    restore(pid);
+    restore_vma(pid);
     
     return 0;
 }
