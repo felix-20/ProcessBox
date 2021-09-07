@@ -1,4 +1,7 @@
-#include "processbox.h"
+#include <wait.h>
+
+#include "pb_files.h"
+#include "pb_memory.h"
 
 int main(int argc, char *argv[])
 {
@@ -33,11 +36,20 @@ int main(int argc, char *argv[])
     // sprintf(command, "cp /proc/%s/cmdline $cmdline .", argv[1]);
     // system(command);
 
+    // attach to the process
+    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
+    {
+        perror("invalid PID\n");
+        exit(1);
+    }
+    wait(NULL);
+
     save_vma(pid);
     log("VMA saved successfully\n");
 
     if (save_files)
     {
+        // for now, save only one file
         save_file(pid);
         log("File saved successfully\n");
     }

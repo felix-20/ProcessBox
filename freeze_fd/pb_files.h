@@ -1,16 +1,10 @@
 #include <dirent.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ptrace.h>
-#include <sys/reg.h>
 #include <sys/stat.h>
-#include <sys/syscall.h>
-#include <sys/types.h>
 #include <sys/uio.h>
-#include <sys/user.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #define log printf
@@ -24,10 +18,10 @@ ProcessBox File
 struct pb_file
 {
     int fd;
-    char *mode;
+    char *mode; // r/w/r+
     off_t offset;
     int size;
-    char *filename;
+    char *filename; // with absolut path TODO: use relative paths
     char *contents;
 };
 
@@ -54,7 +48,7 @@ off_t get_offset(pid_t pid, int fd)
 }
 
 /*
-Returs size of file with (fd) of process with (pid)
+Returns size of file with (fd) of process with (pid)
 */
 int get_size(pid_t pid, int fd)
 {
@@ -67,7 +61,7 @@ int get_size(pid_t pid, int fd)
 }
 
 /*
-Returs filename of file with (fd) of process with (pid)
+Returns filename of file with (fd) of process with (pid)
 */
 char *get_filename(pid_t pid, int fd)
 {
@@ -92,7 +86,7 @@ char *get_filename(pid_t pid, int fd)
 }
 
 /*
-Returs mode of file with (fd) of process with (pid)
+Returns access mode of file with (fd) of process with (pid)
 */
 char *get_mode(pid_t pid, int fd)
 {
@@ -115,7 +109,7 @@ char *get_mode(pid_t pid, int fd)
 }
 
 /*
-Writes contents of (file).
+Set contents of (file)
 !! filename must be set !! 
 */
 void save_contents(struct pb_file *file)
@@ -133,10 +127,10 @@ void save_contents(struct pb_file *file)
 }
 
 /*
-Parse info of file with (fd) of process with (pid) into (file)
+Set info of file with (fd) of process with (pid) in (file)
 */
-
-void parse_file_info(pid_t pid, int fd, struct pb_file *file){
+void parse_file_info(pid_t pid, int fd, struct pb_file *file)
+{
     file->fd = fd;
     log("\t-FD: %i\n", file->fd);
     file->filename = get_filename(pid, fd);
@@ -167,7 +161,7 @@ void save_file_info(struct pb_file *file, char *file_name)
 }
 
 /*
-Finds the fd of a file of process with pid and save it's info into a file
+Finds the fd of a file of process with (pid) and save it's info into a file
 This takes the first file in /proc that's not stdin, stdout or stderr
 */
 void save_file(pid_t pid)
@@ -205,11 +199,11 @@ void save_file(pid_t pid)
 // /* -------- RESTORE ---------- */
 
 /*
-Creates file with file name (file_path) and writes (file)'s contents in it
+Creates file with (file)'s name and contents
 */
-void restore_contents(char *file_path, struct pb_file *file)
+void restore_contents(struct pb_file *file)
 {
-    FILE *fptr = fopen(file_path, "w");
+    FILE *fptr = fopen(file->filename, "w");
     if (fptr == NULL)
     {
         perror("Error creating file");
@@ -220,9 +214,10 @@ void restore_contents(char *file_path, struct pb_file *file)
 }
 
 /*
-Makes process with (pid) opens (file) with (file_path).
+Makes process with (pid) open (file) with (file_path).
 Ensure that the opened file has an identical fd of (file).
 !! Only use this function, if the new process didn't open the file yet !!
+!! For this we need GDB !!
 */
 void restore_fd(pid_t pid, struct pb_file *file, char *file_path)
 {
@@ -234,13 +229,14 @@ void restore_fd(pid_t pid, struct pb_file *file, char *file_path)
 }
 
 /*
-Sets offset of process with (pid) to (file)'s offset
+Sets offset of process with (pid) to (file)'s offset.
+!! For this we need GDB !!
 */
 void restore_offset(pid_t pid, struct pb_file *file)
 {
     char command[1024];
     snprintf(command, 1024,
-             "gdb --pid=%i --silent --batch -ex 'compile code lseek(%i,%li,0)'",
+             "gdb --pid=%i --silent --batch-silent -ex 'compile code lseek(%i,%li,0)'",
              pid, file->fd, file->offset);
     system(command);
 }
@@ -251,6 +247,12 @@ Reads the saved file with (filename) and writes it into (file)
 void read_file_backup(struct pb_file *file, char *filename)
 {
     FILE *backup_file = fopen(filename, "r");
+    if (backup_file == NULL)
+    {
+        perror("Can't open backup file");
+        exit(1);
+    }
+    log("Files:\n");
     fscanf(backup_file, "%i", &(file->fd));
     log("\t-FD: %i\n", file->fd);
     file->mode = malloc(sizeof(char) * 2);
@@ -277,4 +279,18 @@ void read_file_backup(struct pb_file *file, char *filename)
     file->contents = line;
 
     fclose(backup_file);
+}
+
+/*
+Restores file that is saved in (backup_file) for process with (pid)
+*/
+void restore_file(pid_t pid, char *backup_file)
+{
+    struct pb_file file;
+    read_file_backup(&file, backup_file);
+    restore_contents(&file);
+    // // only use when the process didn't open the file manually
+    // restore_fd(pid, &file, fn);
+    restore_offset(pid, &file);
+    log("Offset set successfully\n");
 }

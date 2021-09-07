@@ -1,88 +1,84 @@
-#include <dirent.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ptrace.h>
-#include <sys/reg.h>
-#include <sys/stat.h>
-#include <sys/syscall.h>
-#include <sys/types.h>
-#include <sys/uio.h>
 #include <sys/user.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 #define log printf
 
 #define MAXSIZE 1 << 13
 #define BUF_SIZE 1024
-struct stack_space
-{
-    long start, end;
-};
 
-struct heap_space
+/*
+Virtual Memory Area Space
+*/
+struct vma_space
 {
     long start, end;
 };
 
 const int long_size = sizeof(long);
 
-void getdata(pid_t pid, long addr, unsigned char *str, int len)
+/*
+Reads data from VMA of process with (pid) beginning at (addr) with (len) and wirtes in (data)
+*/
+void getdata(pid_t pid, long addr, unsigned char *data, int len)
 {
-
     int p = 0;
     unsigned char *laddr;
-    int i, j;
     union u
     {
         long val;
         unsigned char chars[long_size];
-    } data;
+    } ptrace_res;
+    int i, j;
     i = 0;
     j = len / long_size;
-    laddr = str;
+    laddr = data;
     while (i < j)
     {
-        data.val = ptrace(PTRACE_PEEKDATA, pid,
-                          addr + i * 4, NULL);
-        if (data.val == -1)
+        ptrace_res.val = ptrace(PTRACE_PEEKDATA, pid,
+                                addr + i * 4, NULL);
+        if (ptrace_res.val == -1)
         {
             printf("unable to read data %i\n", p);
             exit(1);
         }
         p += 1;
-        memcpy(laddr, data.chars, long_size);
+        memcpy(laddr, ptrace_res.chars, long_size);
         ++i;
         laddr += long_size;
     }
     j = len % long_size;
     if (j != 0)
     {
-        data.val = ptrace(PTRACE_PEEKDATA, pid,
-                          addr + i * 4, NULL);
-        memcpy(laddr, data.chars, j);
+        ptrace_res.val = ptrace(PTRACE_PEEKDATA, pid,
+                                addr + i * 4, NULL);
+        memcpy(laddr, ptrace_res.chars, j);
     }
-    str[len] = '\0';
+    data[len] = '\0';
 }
-void putdata(pid_t pid, long addr, unsigned char *str, int len)
+
+/*
+Writes (data) into VMA of process with (pid) beginning at (addr) with (len)
+*/
+void putdata(pid_t pid, long addr, unsigned char *data, int len)
 {
     unsigned char *laddr;
-    int i, j;
     union u
     {
         long val;
         unsigned char chars[long_size];
-    } data;
+    } ptrace_res;
+    int i, j;
     i = 0;
     j = len / long_size;
-    laddr = str;
+    laddr = data;
     while (i < j)
     {
-        memcpy(data.chars, laddr, long_size);
+        memcpy(ptrace_res.chars, laddr, long_size);
         if (ptrace(PTRACE_POKEDATA, pid,
-                   addr + i * 4, data.val))
+                   addr + i * 4, ptrace_res.val))
         {
             printf("unable to write data\n");
             exit(1);
@@ -93,72 +89,72 @@ void putdata(pid_t pid, long addr, unsigned char *str, int len)
     j = len % long_size;
     if (j != 0)
     {
-        memcpy(data.chars, laddr, j);
+        memcpy(ptrace_res.chars, laddr, j);
         ptrace(PTRACE_POKEDATA, pid,
-               addr + i * 4, data.val);
+               addr + i * 4, ptrace_res.val);
     }
 }
 
-struct stack_space get_stack_space(pid_t pid)
+/*
+Returns vma space of stack for process with (pid)
+*/
+struct vma_space get_stack_space(pid_t pid)
 {
-    FILE *fp;
-    char line[2048], proc_path[50];
+    FILE *fptr;
+    char line[1024], proc_path[64];
     snprintf(proc_path, sizeof(proc_path), "/proc/%d/maps", pid);
-    fp = fopen(proc_path, "r");
-    if (fp == NULL)
+    fptr = fopen(proc_path, "r");
+    if (fptr == NULL)
     {
         perror("Error opening file");
         exit(1);
     }
-    struct stack_space sp;
+    struct vma_space sp;
     do
     {
-        if (strstr(line, "[stack]") != NULL)
+        if (strstr(line, "[stack]") != NULL) // line of stack found
         {
             return sp;
         }
-        fscanf(fp, "%lx-%lx", &sp.start, &sp.end);
-    } while (fgets(line, 2048, fp) != NULL);
+        fscanf(fptr, "%lx-%lx", &sp.start, &sp.end);
+    } while (fgets(line, sizeof(line), fptr) != NULL);
     perror("Error finding stack");
     exit(1);
 }
 
-struct heap_space get_heap_space(pid_t pid)
+/*
+Returns vma space of heap for process with (pid)
+*/
+struct vma_space get_heap_space(pid_t pid)
 {
-    FILE *fp;
+    FILE *fptr;
     char line[2048], proc_path[50];
     snprintf(proc_path, sizeof(proc_path), "/proc/%d/maps", pid);
-    fp = fopen(proc_path, "r");
-    if (fp == NULL)
+    fptr = fopen(proc_path, "r");
+    if (fptr == NULL)
     {
         perror("Error opening file");
         exit(1);
     }
-    struct heap_space hp;
+    struct vma_space hp;
     do
     {
-        if (strstr(line, "[heap]") != NULL)
+        if (strstr(line, "[heap]") != NULL) // line with heap found
         {
             return hp;
         }
-        fscanf(fp, "%lx-%lx", &hp.start, &hp.end);
-    } while (fgets(line, 2048, fp) != NULL);
+        fscanf(fptr, "%lx-%lx", &hp.start, &hp.end);
+    } while (fgets(line, 2048, fptr) != NULL);
     perror("Error finding heap");
     exit(1);
 }
 
+/*
+Saves registers, stack and heap into binary files
+*/
 void save_vma(pid_t pid)
 {
-    FILE *write_ptr;
-
-    // attach to the process
-    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
-    {
-        perror("invalid PID\n");
-        exit(1);
-    }
-    log("Process attached successfully\n");
-    wait(NULL);
+    FILE *fptr;
 
     // get registers
     struct user_regs_struct regs;
@@ -169,52 +165,48 @@ void save_vma(pid_t pid)
     }
 
     // write registers into a binary file
-    write_ptr = fopen("registers.bin", "wb");
-    fwrite(&regs, sizeof(struct user_regs_struct), 1, write_ptr);
-    fclose(write_ptr);
+    fptr = fopen("registers.bin", "wb");
+    fwrite(&regs, sizeof(struct user_regs_struct), 1, fptr);
+    fclose(fptr);
     log("Registers saved successfully\n");
 
     // read stack
-    struct stack_space stack_space = get_stack_space(pid);
+    struct vma_space stack_space = get_stack_space(pid);
     long long stack_size = stack_space.end - regs.rsp;
     unsigned char *stack_data = (unsigned char *)malloc(sizeof(unsigned char) * stack_size * 4);
     getdata(pid, regs.rsp, stack_data, stack_size);
 
     // write stack into a binary file
-    write_ptr = fopen("stack.bin", "wb");
-    fwrite(stack_data, sizeof(unsigned char), stack_size, write_ptr);
-    fclose(write_ptr);
+    fptr = fopen("stack.bin", "wb");
+    fwrite(stack_data, sizeof(unsigned char), stack_size, fptr);
+    fclose(fptr);
     log("Stack saved successfully\n");
 
     // read heap
-    struct heap_space heap_space = get_heap_space(pid);
+    struct vma_space heap_space = get_heap_space(pid);
     long long heap_size = heap_space.end - heap_space.start - 2000;
     unsigned char *heap_data = (unsigned char *)malloc(sizeof(unsigned char) * heap_size * 4);
     getdata(pid, heap_space.start + 2000, heap_data, heap_size);
 
     // write heap into a binary file
-    write_ptr = fopen("heap.bin", "wb");
-    fwrite(heap_data, sizeof(unsigned char), heap_size, write_ptr);
-    fclose(write_ptr);
+    fptr = fopen("heap.bin", "wb");
+    fwrite(heap_data, sizeof(unsigned char), heap_size, fptr);
+    fclose(fptr);
     log("Heap saved successfully\n");
 }
 
+/*
+Restores registers, stack and heap from binary files
+*/
 void restore_vma(pid_t pid)
 {
-    // attach to the process
-    if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1)
-    {
-        printf("invalid PID\n");
-        exit(1);
-    }
-    wait(NULL);
+    FILE *fptr;
 
-    FILE *read_ptr;
     // read registers from a binary file
     struct user_regs_struct regs;
-    read_ptr = fopen("registers.bin", "rb");
-    fread(&regs, sizeof(struct user_regs_struct), 1, read_ptr);
-    fclose(read_ptr);
+    fptr = fopen("registers.bin", "rb");
+    fread(&regs, sizeof(struct user_regs_struct), 1, fptr);
+    fclose(fptr);
 
     // set registers
     if (ptrace(PTRACE_SETREGS, pid, NULL, &regs) == -1)
@@ -222,45 +214,34 @@ void restore_vma(pid_t pid)
         printf("unable to set registers\n");
         exit(1);
     }
+    log("Registers restored successfully\n");
 
     // read stack from a binary file
-    struct stack_space stack_space = get_stack_space(pid);
+    struct vma_space stack_space = get_stack_space(pid);
     long long stack_size = stack_space.end - regs.rsp;
     unsigned char *stack_data = (unsigned char *)malloc(sizeof(unsigned char) * stack_size * 4);
-    read_ptr = fopen("stack.bin", "rb");
-    fread(stack_data, sizeof(unsigned char), stack_size, read_ptr);
-    fclose(read_ptr);
+    fptr = fopen("stack.bin", "rb");
+    fread(stack_data, sizeof(unsigned char), stack_size, fptr);
+    fclose(fptr);
 
-    // write the new stack. start after the return address of main
-    int i = 92;
-    while (i * 4 <= stack_size)
-    {
-        unsigned char d[4] = {*(stack_data + i * 4), *(stack_data + i * 4 + 1), *(stack_data + i * 4 + 2), *(stack_data + i * 4 + 3)};
-        putdata(pid, regs.rsp + 4 * i / 2, d, 4);
-        i += 2;
-    }
+    // stack_offset: area before return addres of main
+    // can't be overwritten due to stack canaries
+    int stack_offset = 92;
+    // write the new stack
+    putdata(pid, regs.rsp + stack_offset * 2, stack_data + (4 * stack_offset), stack_size - (stack_offset));
+    log("Stack restored successfully\n");
 
     // read heap from a binary file
-    struct heap_space heap_space = get_heap_space(pid);
-    long long heap_size = heap_space.end - heap_space.start - 2000;
+    struct vma_space heap_space = get_heap_space(pid);
+    long long heap_size = heap_space.end - heap_space.start;
     unsigned char *heap_data = (unsigned char *)malloc(sizeof(unsigned char) * heap_size * 4);
-    read_ptr = fopen("heap.bin", "rb");
-    fread(heap_data, sizeof(unsigned char), heap_size, read_ptr);
-    fclose(read_ptr);
+    fptr = fopen("heap.bin", "rb");
+    fread(heap_data, sizeof(unsigned char), heap_size, fptr);
+    fclose(fptr);
 
-    // write the new heap. start after the return address of main
-    i = 0;
-    while (i * 4 <= heap_size)
-    {
-        unsigned char d[4] = {*(heap_data + i * 4), *(heap_data + i * 4 + 1), *(heap_data + i * 4 + 2), *(heap_data + i * 4 + 3)};
-        putdata(pid, heap_space.start + 2000 + 4 * i / 2, d, 4);
-        i += 2;
-    }
-
-    // deattach from process
-    if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1)
-    {
-        printf("unable to deattach the process\n");
-        exit(1);
-    }
+    // heap_offset: secured area of heap, can't be overwritten
+    int heap_offset = 2000;
+    // write the new heap
+    putdata(pid, heap_space.start + 2 * heap_offset, heap_data + (4 * heap_offset), heap_size - heap_offset);
+    log("Heap restored successfully\n");
 }
