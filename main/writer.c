@@ -14,7 +14,7 @@ int main()
     {
         fprintf(file, "%i\n", i);
         printf("%i\n", i);
-        // For refreshing content
+        // refresh content of file
         fflush(file);
         sleep(2);
     }

@@ -1,8 +1,10 @@
 *
 !*/
 !.gitignore
+!Makefile
 !*.*
 *.txt
 *.backup
 *.out
 *.bin
+*.o

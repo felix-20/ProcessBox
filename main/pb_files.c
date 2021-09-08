@@ -7,29 +7,9 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#define log printf
+#include "pb_files.h"
 
-#define MAXSIZE 1 << 13
-#define BUF_SIZE 1024
 
-/*
-ProcessBox File
-*/
-struct pb_file
-{
-    int fd;
-    char *mode; // r/w/r+
-    off_t offset;
-    int size;
-    char *filename; // with absolut path TODO: use relative paths
-    char *contents;
-};
-
-/* -------- SAVE ---------- */
-
-/*
-Returns offset of file with (fd) of process with (pid)
-*/
 off_t get_offset(pid_t pid, int fd)
 {
     FILE *fptr;
@@ -47,9 +27,6 @@ off_t get_offset(pid_t pid, int fd)
     return atoi(line + 5);
 }
 
-/*
-Returns size of file with (fd) of process with (pid)
-*/
 int get_size(pid_t pid, int fd)
 {
     struct stat stat_buf;
@@ -60,9 +37,6 @@ int get_size(pid_t pid, int fd)
     return stat_buf.st_size;
 }
 
-/*
-Returns filename of file with (fd) of process with (pid)
-*/
 char *get_filename(pid_t pid, int fd)
 {
 
@@ -85,9 +59,6 @@ char *get_filename(pid_t pid, int fd)
     return strdup(buf);
 }
 
-/*
-Returns access mode of file with (fd) of process with (pid)
-*/
 char *get_mode(pid_t pid, int fd)
 {
     struct stat stat_buf;
@@ -108,10 +79,6 @@ char *get_mode(pid_t pid, int fd)
     }
 }
 
-/*
-Set contents of (file)
-!! filename must be set !! 
-*/
 void save_contents(struct pb_file *file)
 {
     FILE *fptr = fopen(file->filename, "r");
@@ -126,9 +93,6 @@ void save_contents(struct pb_file *file)
     fclose(fptr);
 }
 
-/*
-Set info of file with (fd) of process with (pid) in (file)
-*/
 void parse_file_info(pid_t pid, int fd, struct pb_file *file)
 {
     file->fd = fd;
@@ -144,9 +108,6 @@ void parse_file_info(pid_t pid, int fd, struct pb_file *file)
     save_contents(file);
 }
 
-/*
-Writes all fields of (file) into a backup file with (file_name)
-*/
 void save_file_info(struct pb_file *file, char *file_name)
 {
 
@@ -160,10 +121,6 @@ void save_file_info(struct pb_file *file, char *file_name)
     fclose(backup_file);
 }
 
-/*
-Finds the fd of a file of process with (pid) and save it's info into a file
-This takes the first file in /proc that's not stdin, stdout or stderr
-*/
 void save_file(pid_t pid)
 {
     struct dirent *fd_dirent;
@@ -196,11 +153,6 @@ void save_file(pid_t pid)
     save_file_info(&file, "file.backup");
 }
 
-// /* -------- RESTORE ---------- */
-
-/*
-Creates file with (file)'s name and contents
-*/
 void restore_contents(struct pb_file *file)
 {
     FILE *fptr = fopen(file->filename, "w");
@@ -213,12 +165,6 @@ void restore_contents(struct pb_file *file)
     fclose(fptr);
 }
 
-/*
-Makes process with (pid) open (file) with (file_path).
-Ensure that the opened file has an identical fd of (file).
-!! Only use this function, if the new process didn't open the file yet !!
-!! For this we need GDB !!
-*/
 void restore_fd(pid_t pid, struct pb_file *file, char *file_path)
 {
     char command[1024];
@@ -228,10 +174,6 @@ void restore_fd(pid_t pid, struct pb_file *file, char *file_path)
     system(command);
 }
 
-/*
-Sets offset of process with (pid) to (file)'s offset.
-!! For this we need GDB !!
-*/
 void restore_offset(pid_t pid, struct pb_file *file)
 {
     char command[1024];
@@ -241,9 +183,6 @@ void restore_offset(pid_t pid, struct pb_file *file)
     system(command);
 }
 
-/*
-Reads the saved file with (filename) and writes it into (file)
-*/
 void read_file_backup(struct pb_file *file, char *filename)
 {
     FILE *backup_file = fopen(filename, "r");
@@ -281,9 +220,6 @@ void read_file_backup(struct pb_file *file, char *filename)
     fclose(backup_file);
 }
 
-/*
-Restores file that is saved in (backup_file) for process with (pid)
-*/
 void restore_file(pid_t pid, char *backup_file)
 {
     struct pb_file file;
