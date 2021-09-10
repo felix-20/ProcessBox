@@ -1,20 +1,23 @@
 # ProcessBox
 
-## our goal
-We want to take a running process and save it into a file.
-Afterwards we want to take the file and restore the process.
-Therefor we researched different possibilities to get information about running processes and freezing them.
+We aim to save the state of a running process including one file that's being accessed by this process. Afterwards, we should be able to restore the state of this process, even after a reboot has beed made. Therefor we experimented and tried different possibilities to get information about running processes in order to freeze them.
 
-## tests programs
-test - a little counter, can be used to test different approaches
+## main
 
-### using kill
-send signals - able to send signals to processes, using signals and kill
+Our main program saves and restores the virtual memory area and registers of a programm called `writer`. It also backups the file that is used by `writer` and restores also the file.
+
+### signals
+
+We experimented with signals like `SIGSTOP`.
 
 ### cgroup
-freezer cgroup - bash script to put a process by its pid into freezer group and freeze the entire group
-cgroup_freezer does all of this in one step, letting the terminal sleep for a few seconds.
-You can use the other scripts to do this step by step
 
-### ptrace & stack (reloaded)
-save.c is a script to save not only the cmline and cwd but also the whole stack and the stack pointer. Use -s to stop the process afterwards. With restore.c you can use these information to restore the process. Don't forget to deactivate ASLR in Linux by executing ```echo 0 | sudo tee /proc/sys/kernel/randomize_va_space```
+Another possiblity to freeze a process is to force the kernel to swap it. We do this by assigning the process to a cgroup and limit the memory size of this cgroup, so the kernel saves the process on the harddisk.
+
+cgroup - bash script to put a process by its pid into freezer group and freeze the entire group
+cgroup_freezer does all of this in one step, letting the terminal sleep for a few seconds.
+You can use the other scripts to do this step by step.
+
+### cwd_cmdline
+
+There is the possibilty to only save the current working directory (cwd) and the command line of a process to restart it again later.
