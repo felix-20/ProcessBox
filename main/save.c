@@ -62,8 +62,10 @@ int main(int argc, char *argv[])
     // stop the process if wished
     if (terminate_process)
     {
-        ptrace(PTRACE_KILL, pid, NULL, NULL);
-        log("Process terminated successfully\n");
+        if (kill(pid, SIGKILL) == -1)
+            perror("Can't terminate process\n");
+        else
+            log("Process terminated successfully\n");
     }
     // deattach from process
     else if (ptrace(PTRACE_DETACH, pid, NULL, NULL) == -1)
