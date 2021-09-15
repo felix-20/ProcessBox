@@ -25,7 +25,7 @@ void getdata(pid_t pid, long addr, unsigned char *data, int len)
                                 addr + i * 4, NULL);
         if (ptrace_res.val == -1)
         {
-            printf("unable to read data %i\n", p);
+            perror("unable to read data %i\n", p);
             exit(1);
         }
         p += 1;
@@ -61,7 +61,7 @@ void putdata(pid_t pid, long addr, unsigned char *data, int len)
         if (ptrace(PTRACE_POKEDATA, pid,
                    addr + i * 4, ptrace_res.val))
         {
-            printf("unable to write data\n");
+            perror("unable to write data\n");
             exit(1);
         }
         ++i;
@@ -132,7 +132,7 @@ void save_vma(pid_t pid)
     struct user_regs_struct regs;
     if (ptrace(PTRACE_GETREGS, pid, NULL, &regs) == -1)
     {
-        printf("unable to fetch registers\n");
+        perror("unable to fetch registers\n");
         exit(1);
     }
 
@@ -180,7 +180,7 @@ void restore_vma(pid_t pid)
     // set registers
     if (ptrace(PTRACE_SETREGS, pid, NULL, &regs) == -1)
     {
-        printf("unable to set registers\n");
+        perror("unable to set registers\n");
         exit(1);
     }
     log("Registers restored successfully\n");
