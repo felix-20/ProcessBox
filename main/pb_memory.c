@@ -25,7 +25,7 @@ void getdata(pid_t pid, long addr, unsigned char *data, int len)
                                 addr + i * 4, NULL);
         if (ptrace_res.val == -1)
         {
-            perror("unable to read data %i\n", p);
+            perror("unable to read data from vma\n");
             exit(1);
         }
         p += 1;
@@ -61,7 +61,7 @@ void putdata(pid_t pid, long addr, unsigned char *data, int len)
         if (ptrace(PTRACE_POKEDATA, pid,
                    addr + i * 4, ptrace_res.val))
         {
-            perror("unable to write data\n");
+            perror("unable to write data in vma\n");
             exit(1);
         }
         ++i;
